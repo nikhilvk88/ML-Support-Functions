@@ -121,3 +121,63 @@ def create_pipeline():
     processing_pipeline2 = make_pipeline(RobustScaler(),
                                          StandardScaler(),
                                          GradientBoostingRegressor())
+
+
+ # Utility function to report best scores,top 3 here
+def report(results, n_top=3):
+    for i in range(1, n_top + 1):
+        candidates = np.flatnonzero(results['rank_test_score'] == i)
+        for candidate in candidates:
+            print("Model with rank: {0}".format(i))
+            print("Mean validation score: {0:.3f} (std: {1:.3f})".format(
+                  results['mean_test_score'][candidate],
+                  results['std_test_score'][candidate]))
+            print("Parameters: {0}".format(results['params'][candidate]))
+            print("")
+
+
+def GridsearchCV(X_train,y_train):
+
+
+    params = {'n_estimators':[300,500,800,1100,1500,1800],
+              'max_features': [0.5,0.7,0.9,'auto'],
+              'min_samples_split': [2,3,10],
+              'min_samples_leaf': [1,3,10]}
+
+    start = time()
+    #warm_start=True implies reuse previously computed values if we run it a second time
+    gridSearch_rf = GridSearchCV(RandomForestRegressor(warm_start=True,n_jobs=8),param_grid=params,n_jobs=8)
+    gridSearch_rf.fit(X_train,y_train)
+    print('training took {} minutes'.format((time() - start)/60.))
+    #Print out the best parameters
+    gridSearch_rf.best_params_
+
+    print_mse(gridSearch_rf, X_train,X_valid,y_train,y_valid)
+
+    #Call
+    report(gridSearch_rf.cv_results_)
+
+    #Save the gridsearch model
+    joblib.dump(gridSearch_rf,'gridSearch_rf.pkl')
+
+
+def RandomGridsearchCV(X_train,X_valid,y_train,y_valid):
+
+    kfold = KFold(n_splits=5, shuffle=True, random_state=0)
+
+    params = {'n_estimators':[300,500,800,1100,1500,1800],
+                  "max_features": randint(80,680), #Pick random features betwenn 80 & 680
+                  "min_samples_split": randint(2, 11),
+                  "min_samples_leaf": randint(1, 11),
+                  "subsample":[0.6,0.7,0.75,0.8,0.9]
+             }
+
+    randomSearch_gb = RandomizedSearchCV(GradientBoostingRegressor(warm_start=True),
+                                         param_distributions=params,n_iter=20,
+                                         cv=kfold,n_jobs=6)
+    randomSearch_gb.fit(X_train,y_train)
+    print_mse(randomSearch_gb, X_train,X_valid,y_train,y_valid)
+    joblib.dump(randomSearch_gb,'randomSearch_gb.pkl')
+
+    #Get best models
+    report(randomSearch_gb.cv_results_)
